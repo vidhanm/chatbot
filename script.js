@@ -3,26 +3,81 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const imageUpload = document.getElementById('image-upload');
 const imagePreviewArea = document.getElementById('image-preview-area');
+const chatContainer = document.getElementById('chat-container'); // Get chat container
 
 let conversationHistory = [];
-let selectedImageFile = null; // Variable to hold the selected image file
+let selectedImageFile = null;
 
-// --- Event Listener for Image Selection ---
-imageUpload.addEventListener('change', handleImageSelect);
+// --- Event Listener for Image Selection (File Input) ---
+imageUpload.addEventListener('change', handleFileSelectEvent);
 
-function handleImageSelect(event) {
+function handleFileSelectEvent(event) {
     const file = event.target.files[0];
     if (file) {
-        selectedImageFile = file;
-        displayImagePreview(file);
+        processSelectedFile(file);
     }
+    // Reset the input value so the same file can be selected again if removed
     event.target.value = null;
 }
 
-function displayImagePreview(file) {
+// --- NEW: Event Listener for Clipboard Paste ---
+// Listen on the container or document to catch pastes even if input isn't focused
+document.addEventListener('paste', handlePasteEvent);
+
+function handlePasteEvent(event) {
+    const items = (event.clipboardData || window.clipboardData)?.items;
+    if (!items) return; // Clipboard data not accessible
+
+    let foundImage = false;
+    for (let i = 0; i < items.length; i++) {
+        // Check if the item is an image file
+        if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+            const file = items[i].getAsFile();
+            if (file) {
+                event.preventDefault(); // Prevent default paste action (e.g., pasting into text input)
+                console.log("Image pasted from clipboard:", file.name);
+                processSelectedFile(file);
+                foundImage = true;
+                break; // Process only the first image found
+            }
+        }
+    }
+
+    // Optional: Handle plain text paste directly into input if needed and no image found
+    // if (!foundImage && event.target === messageInput) {
+    //     // Allow default text paste into the input
+    // } else if (!foundImage) {
+    //     event.preventDefault(); // Prevent pasting non-image files elsewhere
+    // }
+}
+
+
+// --- NEW: Central function to process a selected/pasted file ---
+function processSelectedFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+        console.error("Invalid file selected/pasted.");
+        return;
+    }
+     // Clear any previously selected file before processing the new one
+    clearImageSelection();
+    selectedImageFile = file;
+    displayImagePreview(file);
+}
+
+function clearImageSelection() {
+    selectedImageFile = null;
     imagePreviewArea.innerHTML = '';
+    // Also reset the file input visually in case it was used
+    imageUpload.value = null;
+}
+
+
+function displayImagePreview(file) {
+    imagePreviewArea.innerHTML = ''; // Clear previous preview first
+
     const previewElement = document.createElement('div');
     previewElement.classList.add('preview-item');
+
     const reader = new FileReader();
     reader.onload = function(e) {
         const img = document.createElement('img');
@@ -30,50 +85,29 @@ function displayImagePreview(file) {
         previewElement.appendChild(img);
     }
     reader.readAsDataURL(file);
+
     const fileName = document.createElement('span');
-    fileName.textContent = file.name;
+    fileName.textContent = file.name || 'Pasted Image'; // Provide default name for clipboard images
     previewElement.appendChild(fileName);
+
     const removeButton = document.createElement('span');
     removeButton.textContent = '✖';
     removeButton.classList.add('remove-preview');
     removeButton.title = 'Remove image';
-    removeButton.onclick = () => {
-        selectedImageFile = null;
-        imagePreviewArea.innerHTML = '';
-    };
+    removeButton.onclick = clearImageSelection; // Use the clearer function
     previewElement.appendChild(removeButton);
+
     imagePreviewArea.appendChild(previewElement);
 }
 
-// --- NEW: Simple Markdown to HTML Conversion ---
+// --- Simple Markdown to HTML Conversion ---
 function simpleMarkdownToHtml(text) {
     if (!text) return '';
-
-    // Escape basic HTML characters first to prevent XSS if the LLM includes them unexpectedly
-    // We'll selectively allow <strong> and <br> later.
     let escapedText = text.replace(/&/g, '&')
                           .replace(/</g, '<')
                           .replace(/>/g, '>');
-
-    // 1. Convert **bold** to <strong>bold</strong>
-    // Use a callback to avoid nested markdown issues within bold tags
-    escapedText = escapedText.replace(/\*\*(.*?)\*\*/g, (match, content) => {
-        // Recursively process content inside bold tags if needed (optional)
-        // For now, just wrap with <strong>
-        return `<strong>${content}</strong>`;
-    });
-
-     // Optional: Add italic conversion *italic* to <em>italic</em>
-     // escapedText = escapedText.replace(/\*(.*?)\*/g, (match, content) => {
-     //     return `<em>${content}</em>`;
-     // });
-
-    // 2. Convert newlines (\n) to <br> tags
+    escapedText = escapedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     escapedText = escapedText.replace(/\n/g, '<br>');
-
-    // NOTE: This approach is basic. It won't handle complex nested markdown
-    // or code blocks well. For more advanced rendering, consider a library like 'marked' or 'showdown'.
-
     return escapedText;
 }
 
@@ -82,41 +116,34 @@ function simpleMarkdownToHtml(text) {
 function appendMessage(sender, text, imageUrl = null) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
-    const textNode = document.createElement('div'); // Separate div for text content
-
-    // Basic sanitization for user input display (if ever needed directly)
-    const basicSanitize = (str) => str.replace(/</g, "<").replace(/>/g, ">");
+    const textNode = document.createElement('div');
 
     if (sender === 'User') {
         messageElement.classList.add('user-message');
-        textNode.textContent = text; // Use textContent for user text display for safety
+        textNode.textContent = text;
 
-        if (imageUrl) { // If user sent an image (display it first)
+        if (imageUrl) {
              const imgElement = document.createElement('img');
              imgElement.src = imageUrl;
              imgElement.style.maxWidth = '100%';
              imgElement.style.display = 'block';
              imgElement.style.marginTop = '5px';
              imgElement.style.borderRadius = '5px';
-             messageElement.appendChild(imgElement); // Add image before text node
+             messageElement.appendChild(imgElement);
         }
 
     } else if (sender === 'Bot') {
         messageElement.classList.add('bot-message');
-        conversationHistory.push({ role: "assistant", content: text }); // Add raw bot response to history
-
-        // *** Convert Markdown to HTML for display ***
+        conversationHistory.push({ role: "assistant", content: text });
         const formattedHtml = simpleMarkdownToHtml(text);
-        textNode.innerHTML = formattedHtml; // Use innerHTML to render the HTML tags
+        textNode.innerHTML = formattedHtml;
 
-    } else { // System messages
+    } else {
         messageElement.classList.add('system-message');
-        textNode.textContent = text; // System messages likely don't need formatting
+        textNode.textContent = text;
     }
 
-    // Append the text node to the message element
     messageElement.appendChild(textNode);
-
     chatBox.appendChild(messageElement);
     chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -125,8 +152,7 @@ function appendMessage(sender, text, imageUrl = null) {
 
 
 function limitHistory() {
-    // Optional: Limit history size
-    const maxHistoryLength = 10; // Keep last 10 messages (user + bot)
+    const maxHistoryLength = 10;
     if (conversationHistory.length > maxHistoryLength) {
         const startIndex = conversationHistory.findIndex(msg => msg.role !== "system");
         if (startIndex !== -1 && conversationHistory.length - startIndex > maxHistoryLength) {
@@ -140,19 +166,13 @@ function showThinkingIndicator() {
     const thinkingIndicator = document.createElement('div');
     thinkingIndicator.classList.add('message', 'bot-message');
     thinkingIndicator.id = 'thinking-indicator';
-
-    // Simple text or add animation later
     const dot1 = document.createElement('span'); dot1.textContent = '.';
     const dot2 = document.createElement('span'); dot2.textContent = '.';
     const dot3 = document.createElement('span'); dot3.textContent = '.';
     thinkingIndicator.append('Bot is thinking', dot1, dot2, dot3);
-
-    // Add simple CSS animation to the dots (add corresponding CSS)
     dot1.style.animation = 'blink 1.4s infinite both';
     dot2.style.animation = 'blink 1.4s infinite both 0.2s';
     dot3.style.animation = 'blink 1.4s infinite both 0.4s';
-
-
     chatBox.appendChild(thinkingIndicator);
     chatBox.scrollTop = chatBox.scrollHeight;
 }
@@ -177,20 +197,21 @@ async function sendMessage() {
 
     if (imageToSend) {
         userImagePreviewUrl = URL.createObjectURL(imageToSend);
-        const imagePlaceholder = `[User uploaded image: ${imageToSend.name}]`;
+        // Use a consistent placeholder name, actual filename sent in FormData
+        const imagePlaceholder = `[User uploaded image: ${imageToSend.name || 'pasted_image'}]`;
         historyMessage = userMessageText ? `${userMessageText}\n${imagePlaceholder}` : imagePlaceholder;
-         // Display message might just be the text, image is shown separately
-         displayMessage = userMessageText;
+        displayMessage = userMessageText;
     }
 
     appendMessage('User', displayMessage, userImagePreviewUrl);
 
-    conversationHistory.push({ role: "user", content: historyMessage }); // Add potentially modified msg to history
+    conversationHistory.push({ role: "user", content: historyMessage });
     limitHistory();
 
     messageInput.value = '';
-    selectedImageFile = null;
-    imagePreviewArea.innerHTML = '';
+    // Use the clearer function here too
+    clearImageSelection();
+
 
     sendButton.disabled = true;
     messageInput.disabled = true;
@@ -201,7 +222,9 @@ async function sendMessage() {
     const formData = new FormData();
     formData.append('history', JSON.stringify(conversationHistory));
     if (imageToSend) {
-        formData.append('image', imageToSend, imageToSend.name);
+        // Provide a filename if one wasn't available (e.g., from clipboard)
+        const filename = imageToSend.name || `pasted_image.${imageToSend.type.split('/')[1] || 'png'}`;
+        formData.append('image', imageToSend, filename);
     }
 
     try {
@@ -218,7 +241,7 @@ async function sendMessage() {
         }
 
         const data = await response.json();
-        appendMessage('Bot', data.reply); // Pass raw reply to appendMessage
+        appendMessage('Bot', data.reply);
 
     } catch (error) {
         console.error("Error fetching chatbot response:", error);
