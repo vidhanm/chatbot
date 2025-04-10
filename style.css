@@ -197,3 +197,65 @@ h1 {
 #thinking-indicator span:nth-child(3) { /* targeting dot3 */
     animation-delay: 0.4s;
 }
+/* Add these styles to your existing style.css */
+
+/* ... (previous styles) ... */
+
+#input-area {
+    display: flex;
+    padding: 15px;
+    align-items: center; /* Align items vertically */
+}
+
+/* ... (styles for upload-button, message-input) ... */
+
+#send-button {
+    /* Existing styles */
+    /* Make space if stop button is visible */
+    /* margin-left: 5px; remove this if stop button is positioned differently */
+}
+
+/* Style for the new Stop Button */
+.stop-button {
+    padding: 0 15px;
+    background-color: #dc3545; /* Red color */
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9em; /* Slightly smaller */
+    height: 38px;
+    box-sizing: border-box;
+    display: flex; /* Use flex to align icon and text */
+    align-items: center;
+    justify-content: center;
+    margin: 0 8px; /* Add some margin */
+    transition: background-color 0.2s;
+}
+
+.stop-button i {
+    margin-right: 5px; /* Space between icon and text */
+}
+
+
+.stop-button:hover {
+    background-color: #c82333; /* Darker red on hover */
+}
+
+/* Initially hidden - JS will toggle display */
+/* #stop-button[style*="display: none"] is handled inline for initial state */
+
+
+@keyframes blink {
+    0% { opacity: 0.2; }
+    20% { opacity: 1; }
+    100% { opacity: 0.2; }
+}
+#thinking-indicator span {
+    animation-duration: 1.4s;
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+}
+#thinking-indicator span:nth-child(1) { animation-delay: 0s; }
+#thinking-indicator span:nth-child(2) { animation-delay: 0.2s; }
+#thinking-indicator span:nth-child(3) { animation-delay: 0.4s; }
