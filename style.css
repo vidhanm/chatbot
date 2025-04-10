@@ -174,3 +174,26 @@ h1 {
     background-color: #cccccc;
     cursor: not-allowed;
 }
+/* Add this keyframes rule to your style.css */
+@keyframes blink {
+    0% { opacity: 0.2; }
+    20% { opacity: 1; }
+    100% { opacity: 0.2; }
+}
+
+/* Style the thinking indicator message */
+#thinking-indicator span {
+    animation-duration: 1.4s;
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+}
+
+#thinking-indicator span:nth-child(1) { /* targeting dot1 */
+    animation-delay: 0s;
+}
+#thinking-indicator span:nth-child(2) { /* targeting dot2 */
+    animation-delay: 0.2s;
+}
+#thinking-indicator span:nth-child(3) { /* targeting dot3 */
+    animation-delay: 0.4s;
+}
